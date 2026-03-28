@@ -13,6 +13,8 @@ from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'quiz_project.settings')
 
+application = get_wsgi_application()
+
 # Automatically run migrations when deployed on Render
 if os.environ.get('RENDER'):
     try:
@@ -27,4 +29,3 @@ if os.environ.get('RENDER'):
         print(f"Failed to run automatic startup processes: {e}")
         traceback.print_exc()
 
-application = get_wsgi_application()

@@ -85,6 +85,10 @@ def teams_api(request):
         # Save QR Image
         qr_filename = f"team_{team.id}_qr.png"
         qr_path = os.path.join(settings.MEDIA_ROOT, qr_filename)
+        
+        # Ensure media directory exists
+        os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
+
         os.makedirs(settings.MEDIA_ROOT, exist_ok=True)
         qr.save(qr_path)
         

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: quiz-competition
+    env: python
+    buildCommand: ./build.sh
+    startCommand: cd quiz_project && gunicorn quiz_project.wsgi:application
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: quiz-db
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: .render.com
+
+databases:
+  - name: quiz-db
+    plan: free

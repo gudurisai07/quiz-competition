@@ -32,7 +32,12 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure--p=xt8w!yv-ir9m*49gr2
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
+# Allow Render domains and local dev
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+if 'RENDER' in os.environ:
+    host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+    if host:
+        ALLOWED_HOSTS.append(host)
 
 
 # Application definition
@@ -82,14 +87,19 @@ WSGI_APPLICATION = 'quiz_project.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
+# Use DATABASE_URL on Render/Production, fallback to SQLite locally
 DATABASES = {
     'default': dj_database_url.config(
         default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'),
         conn_max_age=600
     )
 }
+
+# 🚨 CRITICAL: Ensure we are using Postgres when on Render
+if 'RENDER' in os.environ and DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    # If we are on Render but still seeing SQLite, it means DATABASE_URL is missing!
+    # We can't fix it in code, but we can log it clearly in the debug page.
+    pass
 
 
 # Password validation

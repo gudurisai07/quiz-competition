@@ -13,4 +13,16 @@ from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'quiz_project.settings')
 
+# Automatically run migrations when deployed on Render
+if os.environ.get('RENDER'):
+    try:
+        from django.core.management import call_command
+        import traceback
+        print("Running automatic database migrations on Render startup...")
+        call_command('migrate', interactive=False)
+        print("Migrations completed successfully.")
+    except Exception as e:
+        print(f"Failed to run automatic migrations: {e}")
+        traceback.print_exc()
+
 application = get_wsgi_application()

@@ -1,0 +1,239 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="h-screen flex flex-col pt-4 px-8 pb-8 overflow-hidden bg-gray-950 text-white">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-400 tracking-widest uppercase">Smart Quiz</h1>
+        <div class="flex gap-4 items-center">
+            <a href="/api/dashboard/" class="px-5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 rounded-lg text-gray-400 text-sm font-bold transition">⚙ Admin Panel</a>
+            <div id="qCount" class="text-xl px-6 py-2 bg-blue-900/30 text-blue-400 rounded-full font-medium border border-blue-800/50">Loading...</div>
+        </div>
+    </div>
+
+    <div class="flex-1 flex gap-8">
+        <!-- Question Area -->
+        <div class="flex-1 flex flex-col justify-center items-center bg-gray-900 rounded-3xl p-12 shadow-2xl border border-gray-800 relative">
+            <h2 id="qText" class="text-5xl font-semibold mb-16 text-center leading-tight">...</h2>
+
+            <div class="grid grid-cols-2 gap-8 w-full max-w-5xl" id="optionsGrid">
+                <div id="optA" onclick="selectOption('A')" class="opt-btn p-8 rounded-2xl text-2xl bg-gray-800 border border-gray-700 flex items-center cursor-pointer hover:bg-gray-700 transition-all duration-200"><span class="lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 bg-gray-700 font-bold">A</span> <span class="optList">...</span></div>
+                <div id="optB" onclick="selectOption('B')" class="opt-btn p-8 rounded-2xl text-2xl bg-gray-800 border border-gray-700 flex items-center cursor-pointer hover:bg-gray-700 transition-all duration-200"><span class="lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 bg-gray-700 font-bold">B</span> <span class="optList">...</span></div>
+                <div id="optC" onclick="selectOption('C')" class="opt-btn p-8 rounded-2xl text-2xl bg-gray-800 border border-gray-700 flex items-center cursor-pointer hover:bg-gray-700 transition-all duration-200"><span class="lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 bg-gray-700 font-bold">C</span> <span class="optList">...</span></div>
+                <div id="optD" onclick="selectOption('D')" class="opt-btn p-8 rounded-2xl text-2xl bg-gray-800 border border-gray-700 flex items-center cursor-pointer hover:bg-gray-700 transition-all duration-200"><span class="lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 bg-gray-700 font-bold">D</span> <span class="optList">...</span></div>
+            </div>
+
+            <!-- Controls -->
+            <div class="absolute bottom-8 left-8 right-8 flex justify-between items-center">
+                <button onclick="nav(-1)" class="px-8 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-xl font-medium">Previous</button>
+                <div class="flex gap-4 items-center">
+                    <select id="timerSelect" onchange="updateTimerDisplay()" class="bg-gray-800 border-2 border-blue-900/50 text-white text-xl rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-gray-700 cursor-pointer transition">
+                        <option value="30">30s</option>
+                        <option value="60" selected>60s</option>
+                        <option value="90">90s</option>
+                    </select>
+                    <button id="timerBtn" onclick="toggleTimer()" class="text-4xl font-mono font-bold text-blue-400 px-8 py-3 bg-blue-950/30 rounded-xl border border-blue-900/50">⏱ 60s</button>
+                    <button onclick="revealAnswer()" class="px-10 py-4 bg-purple-600 hover:bg-purple-500 rounded-xl text-xl font-bold shadow-xl shadow-purple-900/40">Reveal Answer</button>
+                    <button onclick="skipQuestion()" class="px-8 py-4 bg-yellow-700/60 hover:bg-yellow-600 rounded-xl text-xl font-bold text-yellow-300 hover:text-white transition">⏭ Skip</button>
+                </div>
+                <button onclick="nav(1)" class="px-8 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl text-xl font-medium">Next</button>
+            </div>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="w-96 flex flex-col bg-gray-900 rounded-3xl border border-gray-800 overflow-hidden">
+            <div class="p-6 border-b border-gray-800 bg-gray-800/50"><h3 class="text-2xl font-bold text-yellow-500 flex items-center gap-2">🏆 Leaderboard</h3></div>
+            <div class="p-4 overflow-y-auto space-y-4" id="leaderboard"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let questions = [];
+    let currentIdx = 0;
+    let timer = 60;
+    let timerInt = null;
+    let isTimerActive = false;
+    let answerRevealed = false;
+
+    // Unique team color palette
+    const TEAM_COLORS = [
+        { bg: 'rgba(99,102,241,0.15)', border: '#6366f1', score: '#818cf8', bar: '#6366f1', btn: 'bg-indigo-900/40 hover:bg-indigo-600 border-indigo-700 text-indigo-300' },
+        { bg: 'rgba(236,72,153,0.15)', border: '#ec4899', score: '#f472b6', bar: '#ec4899', btn: 'bg-pink-900/40 hover:bg-pink-600 border-pink-700 text-pink-300' },
+        { bg: 'rgba(16,185,129,0.15)', border: '#10b981', score: '#34d399', bar: '#10b981', btn: 'bg-emerald-900/40 hover:bg-emerald-600 border-emerald-700 text-emerald-300' },
+        { bg: 'rgba(245,158,11,0.15)', border: '#f59e0b', score: '#fbbf24', bar: '#f59e0b', btn: 'bg-amber-900/40 hover:bg-amber-600 border-amber-700 text-amber-300' },
+        { bg: 'rgba(239,68,68,0.15)', border: '#ef4444', score: '#f87171', bar: '#ef4444', btn: 'bg-red-900/40 hover:bg-red-600 border-red-700 text-red-300' },
+        { bg: 'rgba(14,165,233,0.15)', border: '#0ea5e9', score: '#38bdf8', bar: '#0ea5e9', btn: 'bg-sky-900/40 hover:bg-sky-600 border-sky-700 text-sky-300' },
+    ];
+
+    async function loadData() {
+        const res = await fetch('/api/questions/');
+        questions = await res.json();
+        renderQ();
+        loadTeams();
+        setInterval(loadTeams, 3000);
+    }
+
+    async function loadTeams() {
+        const res = await fetch('/api/teams/');
+        const teams = await res.json();
+        const lb = document.getElementById('leaderboard');
+        lb.innerHTML = '';
+        const maxScore = Math.max(...teams.map(t => t.score), 1);
+
+        teams.forEach((t, idx) => {
+            const c = TEAM_COLORS[idx % TEAM_COLORS.length];
+            const pct = maxScore > 0 ? Math.max(0, Math.round((t.score / maxScore) * 100)) : 0;
+            const medals = ['🥇','🥈','🥉'];
+            const medal = medals[idx] || `#${idx+1}`;
+            lb.innerHTML += `
+               <div class="p-5 rounded-2xl relative" style="background:${c.bg}; border: 1.5px solid ${c.border}">
+                  <div class="flex justify-between items-center mb-1">
+                     <span class="font-bold text-xl">${medal} ${t.name}</span>
+                     <span class="text-3xl font-black" style="color:${c.score}">${t.score}</span>
+                  </div>
+                  <p class="text-xs mb-2" style="color:${c.score}">${pct}% of top score</p>
+                  <div class="w-full bg-gray-700/40 rounded-full h-1.5 mb-3">
+                     <div class="h-1.5 rounded-full transition-all" style="width:${pct}%; background:${c.bar}"></div>
+                  </div>
+                  <button onclick="addPoint(${t.id})" class="w-full py-2 rounded-lg transition border font-semibold text-sm ${c.btn} hover:text-white">+1 Point</button>
+               </div>
+            `;
+        });
+    }
+
+    async function addPoint(id) {
+        await fetch(`/api/teams/${id}/add_point/`, { method: 'POST' });
+        loadTeams();
+    }
+
+    function renderQ() {
+        if(!questions.length) return;
+        const q = questions[currentIdx];
+        answerRevealed = false;
+        document.getElementById('qCount').textContent = `Question ${currentIdx + 1} / ${questions.length}`;
+        document.getElementById('qText').textContent = q.question;
+
+        ['A', 'B', 'C', 'D'].forEach((l, i) => {
+            const optDiv = document.getElementById(`opt${l}`);
+            optDiv.querySelector('.optList').textContent = q[`option${i+1}`];
+            // Reset styles
+            optDiv.className = "opt-btn p-8 rounded-2xl text-2xl border flex items-center cursor-pointer bg-gray-800 border-gray-700 hover:bg-gray-700 transition-all duration-300";
+            optDiv.querySelector('.lbl').className = "lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 font-bold bg-gray-700 text-gray-300";
+        });
+
+        // Reset timer
+        if (timerInt) { clearInterval(timerInt); isTimerActive = false; }
+        document.getElementById('timerSelect').value = "60";
+        updateTimerDisplay();
+    }
+
+    // ─── NORMALIZE CORRECT ANSWER ─────────────────────────────────────────────
+    function getCorrectLetter(q) {
+        const raw = (q.correct_answer || '').trim();
+        const opts = [q.option1, q.option2, q.option3, q.option4];
+
+        // 1. Try: stored as full option text → find which letter
+        const textMatch = opts.findIndex(o => o && o.trim().toLowerCase() === raw.toLowerCase());
+        if (textMatch >= 0) return ['A','B','C','D'][textMatch];
+
+        // 2. Try: extract single letter from "wer: C", "Ans: A", "Answer: B" etc.
+        const letterExtract = raw.match(/\b([A-Da-d])\b/);
+        if (letterExtract) return letterExtract[1].toUpperCase();
+
+        // 3. Try: first character is a letter A-D
+        if (/^[A-Da-d]$/.test(raw[0])) return raw[0].toUpperCase();
+
+        return null; // unknown
+    }
+
+    // ─── CLICK AN OPTION ────────────────────────────────────────────────────────
+    function selectOption(letter) {
+        if(!questions.length) return;
+        const q = questions[currentIdx];
+        const correctLetter = getCorrectLetter(q);
+
+        const isCorrect = correctLetter === letter;
+
+        if (isCorrect) {
+            // Correct clicked → this one GREEN, all others RED
+            ['A', 'B', 'C', 'D'].forEach(l => {
+                const div = document.getElementById(`opt${l}`);
+                if (l === letter) {
+                    div.className = "opt-btn p-8 rounded-2xl text-2xl border-2 flex items-center bg-green-900/60 border-green-500 shadow-[0_0_40px_rgba(34,197,94,0.5)] scale-105 transition-all duration-300 cursor-pointer";
+                    div.querySelector('.lbl').className = "lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 font-bold bg-green-500 text-white animate-pulse";
+                } else {
+                    div.className = "opt-btn p-8 rounded-2xl text-2xl border-2 flex items-center bg-red-900/40 border-red-700 scale-95 opacity-60 transition-all duration-300 cursor-pointer";
+                    div.querySelector('.lbl').className = "lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 font-bold bg-red-700 text-white";
+                }
+            });
+        } else {
+            // Wrong clicked → only this one RED
+            const optDiv = document.getElementById(`opt${letter}`);
+            optDiv.className = "opt-btn p-8 rounded-2xl text-2xl border-2 flex items-center bg-red-900/50 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] scale-95 transition-all duration-300 cursor-pointer";
+            optDiv.querySelector('.lbl').className = "lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 font-bold bg-red-500 text-white";
+        }
+    }
+
+
+    function revealAnswer() {
+        const q = questions[currentIdx];
+        if (!q) return;
+        answerRevealed = true;
+        const correctLetter = getCorrectLetter(q);
+
+        ['A', 'B', 'C', 'D'].forEach((l) => {
+            const optDiv = document.getElementById(`opt${l}`);
+            const isCorrect = l === correctLetter;
+
+            if (isCorrect) {
+                optDiv.className = "opt-btn p-8 rounded-2xl text-2xl border-2 flex items-center bg-green-900/60 border-green-500 shadow-[0_0_40px_rgba(34,197,94,0.4)] scale-105 transition-all duration-500 z-10 cursor-pointer";
+                optDiv.querySelector('.lbl').className = "lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 font-bold bg-green-500 text-white animate-pulse";
+            } else {
+                optDiv.className = "opt-btn p-8 rounded-2xl text-2xl border flex items-center bg-gray-900 border-gray-800 opacity-20 grayscale scale-95 transition-all duration-500 cursor-pointer";
+                optDiv.querySelector('.lbl').className = "lbl w-12 h-12 flex items-center justify-center rounded-lg mr-6 font-bold bg-gray-800 text-gray-500";
+            }
+        });
+    }
+
+    // ─── SKIP ──────────────────────────────────────────────────────────────────
+    function skipQuestion() {
+        currentIdx++;
+        if(currentIdx >= questions.length) currentIdx = questions.length - 1;
+        renderQ();
+    }
+
+    function nav(dir) {
+        currentIdx += dir;
+        if(currentIdx < 0) currentIdx = 0;
+        if(currentIdx >= questions.length) currentIdx = questions.length-1;
+        renderQ();
+    }
+
+    function updateTimerDisplay() {
+        if(!isTimerActive) {
+            timer = parseInt(document.getElementById('timerSelect').value);
+            document.getElementById('timerBtn').textContent = `⏱ ${timer}s`;
+        }
+    }
+
+    function toggleTimer() {
+        isTimerActive = !isTimerActive;
+        if(isTimerActive) {
+            timerInt = setInterval(() => {
+                timer--;
+                document.getElementById('timerBtn').textContent = `⏱ ${timer}s`;
+                if(timer <= 0) {
+                    clearInterval(timerInt);
+                    isTimerActive = false;
+                    revealAnswer(); // Auto-reveal when time is up
+                }
+            }, 1000);
+        } else {
+            clearInterval(timerInt);
+        }
+    }
+
+    loadData();
+</script>
+{% endblock %}

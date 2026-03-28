@@ -1,0 +1,324 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="p-8 max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-4xl font-bold">Admin Dashboard</h1>
+            <p class="text-gray-500 text-sm mt-1">Welcome back, Admin 👋</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/api/presentation/" class="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-xl font-bold text-sm shadow-lg transition">📺 Projector Mode</a>
+            <a href="/api/auth/logout/" class="px-5 py-3 bg-red-900/40 hover:bg-red-700 rounded-xl font-bold text-sm text-red-400 hover:text-white transition">🚪 Logout</a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Create Team -->
+        <div class="bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl">
+            <h2 class="text-2xl font-semibold mb-6 text-blue-400">Manage Teams</h2>
+            
+            <form id="teamForm" class="flex flex-col gap-4 mb-6">
+                <input type="text" id="teamName" placeholder="Team Name (e.g. Alpha Wolves)" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 outline-none focus:border-blue-500 text-white" />
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold transition">➕ Create Team</button>
+            </form>
+
+            <div id="teamsList" class="space-y-4 max-h-[500px] overflow-y-auto">
+                <!-- Teams will load here -->
+            </div>
+        </div>
+
+        <!-- PDF Upload Section -->
+        <div class="glass-container p-6 animate-slide-up mb-8">
+            <h2 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <span class="p-2 bg-purple-500/20 rounded-lg">📄</span>
+                Step 2: Upload Quiz (PDF)
+            </h2>
+            <p class="text-gray-400 text-sm mb-4">The AI will automatically scan and detect your questions.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 hidden">
+                <div class="relative">
+                    <select id="aiMode" class="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3 px-4 appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/50">
+                        <option value="auto">🤖 Auto-Detect AI (Recommended)</option>
+                    </select>
+                </div>
+                <input type="text" id="openaiKey" placeholder="Paste API Key here (Optional for AI)..." value="" 
+                       class="bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-purple-500/50">
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-grow relative group">
+                    <input type="file" id="pdfFile" accept=".pdf" class="hidden">
+                    <label for="pdfFile" class="flex items-center justify-center w-full bg-slate-800/50 hover:bg-slate-700/50 border-2 border-dashed border-slate-700 group-hover:border-purple-500/50 text-gray-400 py-3 rounded-xl cursor-pointer transition-all">
+                        <span id="fileNameDisplay">📁 Choose PDF Question File</span>
+                    </label>
+                </div>
+                <button onclick="uploadPdf()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black py-3 px-8 rounded-xl transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-500/20 whitespace-nowrap">
+                    🚀 SCAN & PROCESS PDF
+                </button>
+            </div>
+            
+            <div id="uploadStatus" class="mt-4 hidden p-4 rounded-xl bg-slate-900/80 border border-slate-700 animate-fade-in"></div>
+        </div>
+    </div>
+
+    <!-- Questions Manager -->
+    <div class="mt-10 bg-gray-900 rounded-2xl border border-gray-800 shadow-xl p-6">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h2 class="text-2xl font-semibold text-yellow-400">📋 Questions Manager</h2>
+                <p class="text-gray-400 text-sm mt-1">View parsed questions and fix any wrong answers below.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="loadQuestions()" class="px-5 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm font-medium transition">↻ Refresh</button>
+                <button onclick="clearAllQuestions()" class="px-5 py-2 bg-red-900/50 hover:bg-red-600 rounded-lg text-red-400 hover:text-white text-sm font-medium transition">🗑 Clear All</button>
+            </div>
+        </div>
+        <div id="questionsList" class="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+            <p class="text-gray-500 text-sm italic">Click Refresh to load questions...</p>
+        </div>
+    </div>
+
+    <div class="text-center mt-12 pb-8">
+        <a href="/api/presentation/" target="_blank" class="inline-block px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-full font-bold text-xl shadow-2xl transition">Launch Projector Mode</a>
+    </div>
+</div>
+
+<script>
+    // ─── LEADERBOARD ────────────────────────────────────────────────────────────
+    async function fetchTeams() {
+        const res = await fetch('/api/teams/');
+        const teams = await res.json();
+        const list = document.getElementById('teamsList');
+        list.innerHTML = '';
+
+        const maxScore = Math.max(...teams.map(t => t.score), 1);
+        const medals = ['🥇', '🥈', '🥉'];
+
+        teams.forEach((t, idx) => {
+            const pct = maxScore > 0 ? Math.max(0, Math.round((t.score / maxScore) * 100)) : 0;
+            const medal = medals[idx] || `#${idx+1}`;
+            const isFirst = idx === 0;
+            list.innerHTML += `
+                <div class="flex flex-col p-4 rounded-xl border ${isFirst ? 'bg-yellow-500/5 border-yellow-500/30' : 'bg-gray-800/50 border-gray-700/50'}">
+                    <div class="flex justify-between items-center mb-2">
+                        <div>
+                            <h3 class="font-bold text-lg">${medal} ${t.name}
+                                <span class="text-sm font-normal text-gray-400">(${t.members_count || 0}/5)</span>
+                            </h3>
+                            <p class="text-sm text-gray-400 mt-0.5">Score: <span class="font-mono ${isFirst ? 'text-yellow-400' : 'text-green-400'} font-bold">${t.score} pts</span></p>
+                        </div>
+                        <div class="flex gap-1.5 items-center">
+                            <button onclick="addPoint(${t.id})" class="w-9 h-9 bg-green-700 hover:bg-green-500 rounded-lg text-white font-black text-lg transition leading-none">+</button>
+                            <button onclick="subtractPoint(${t.id})" class="w-9 h-9 bg-red-900/70 hover:bg-red-600 rounded-lg text-red-300 hover:text-white font-black text-lg transition leading-none">-</button>
+                            <button onclick="document.getElementById('members_${t.id}').classList.toggle('hidden')" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm transition">👤</button>
+                            <a href="/media/team_${t.id}_qr.png" target="_blank" class="px-3 py-2 bg-blue-900/50 hover:bg-blue-700 rounded-lg text-blue-400 hover:text-white text-sm transition">QR</a>
+                            <button onclick="deleteTeam(${t.id})" class="px-3 py-2 bg-red-900/50 hover:bg-red-600 rounded-lg text-red-400 hover:text-white text-sm transition">🗑</button>
+                        </div>
+                    </div>
+                    <!-- Score bar -->
+                    <div class="w-full bg-gray-700/40 rounded-full h-2 mb-2">
+                        <div class="${isFirst ? 'bg-yellow-400' : 'bg-blue-500'} h-2 rounded-full transition-all" style="width:${pct}%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500">${pct}% of top score</p>
+                    <!-- Members list -->
+                    <div id="members_${t.id}" class="hidden mt-3 pt-3 border-t border-gray-700/50">
+                        <h4 class="text-xs font-bold text-gray-400 mb-2 uppercase">Joined Students:</h4>
+                        <ul class="space-y-1">
+                            ${t.students_list && t.students_list.length > 0
+                                ? t.students_list.map(s => `<li class="flex items-center text-sm text-gray-300"><span class="w-2 h-2 rounded-full bg-blue-500 mr-3"></span>${s.name} <span class="text-gray-500 ml-2">(${s.register_no} - Sec: ${s.section})</span></li>`).join('')
+                                : '<li class="text-sm text-gray-500 italic">No members yet.</li>'
+                            }
+                        </ul>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    document.getElementById('teamForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('teamName').value.trim();
+        if (!name) return;
+        await fetch('/api/teams/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, password: '1234' })
+        });
+        document.getElementById('teamName').value = '';
+        fetchTeams();
+    };
+
+    async function addPoint(id) {
+        await fetch(`/api/teams/${id}/add_point/`, { method: 'POST', headers: {'Content-Type': 'application/json'} });
+        fetchTeams();
+    }
+
+    async function subtractPoint(id) {
+        await fetch(`/api/teams/${id}/subtract_point/`, { method: 'POST', headers: {'Content-Type': 'application/json'} });
+        fetchTeams();
+    }
+
+    async function deleteTeam(id) {
+        if(!confirm('Delete this team?')) return;
+        await fetch(`/api/teams/${id}/`, { method: 'DELETE' });
+        fetchTeams();
+    }
+
+    // File Name Selection Display
+    document.getElementById('pdfFile').onchange = (e) => {
+        const name = e.target.files[0]?.name || '📁 Choose PDF Question File';
+        document.getElementById('fileNameDisplay').innerText = name;
+    };
+
+    // API Key Persistence
+    const keyInput = document.getElementById('openaiKey');
+    const aiMode = document.getElementById('aiMode');
+    
+    // Load saved key on boot
+    const savedKeys = JSON.parse(localStorage.getItem('quiz_fest_keys') || '{}');
+    keyInput.value = savedKeys[aiMode.value] || '';
+    
+    aiMode.onchange = () => {
+        keyInput.value = savedKeys[aiMode.value] || '';
+        keyInput.placeholder = aiMode.value === 'local' ? 'No key needed for Local Parser' : `Paste your ${aiMode.value.toUpperCase()} key here...`;
+    };
+
+    async function uploadPdf() {
+        const file = document.getElementById('pdfFile').files[0];
+        const mode = aiMode.value;
+        const key = keyInput.value;
+        const statusEl = document.getElementById('uploadStatus');
+        
+        if(!file) {
+            statusEl.classList.remove('hidden');
+            statusEl.innerHTML = '<span class="text-red-400 font-bold">❌ Error:</span> <span class="text-gray-400 italic">Please choose a PDF file first.</span>';
+            return;
+        }
+        
+        // Save key for next time
+        if(key) {
+            savedKeys[mode] = key;
+            localStorage.setItem('quiz_fest_keys', JSON.stringify(savedKeys));
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('ai_mode', mode);
+        formData.append('api_key', key);
+        
+        statusEl.classList.remove('hidden');
+        statusEl.innerHTML = `
+            <div class="flex items-center gap-3">
+                <div class="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <span class="text-purple-400 font-medium">🤖 ${mode.toUpperCase()} is deeply scanning your PDF...</span>
+            </div>`;
+        
+        try {
+            const res = await fetch('/api/questions/upload/', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (res.ok) {
+                statusEl.innerHTML = `
+                    <div class="flex flex-col gap-1">
+                        <div class="text-green-400 font-bold flex items-center gap-2">
+                            <span>✅ SCAN COMPLETE</span>
+                            <span class="text-[10px] bg-green-900/30 px-2 py-0.5 rounded-full border border-green-800">${mode.toUpperCase()}</span>
+                        </div>
+                        <div class="text-gray-400 text-xs">${data.message}</div>
+                        <div class="text-[10px] text-gray-500 mt-1 italic">Questions have been added to the database.</div>
+                    </div>
+                `;
+                loadQuestions();
+            } else {
+                statusEl.innerHTML = `
+                    <div class="text-red-400 font-bold mb-1">❌ Parsing Failed</div>
+                    <div class="text-gray-400 text-xs">${data.error}</div>
+                    <div class="text-[10px] text-red-900/50 mt-1 uppercase tracking-widest font-black">Try a different AI or check your key</div>
+                `;
+            }
+        } catch (e) {
+            statusEl.innerHTML = `<span class="text-red-400 font-black">❌ SERVER OFFLINE</span> <span class="text-xs text-gray-500">Check your terminal logs.</span>`;
+        }
+        
+        document.getElementById('pdfFile').value = '';
+    }
+
+    async function loadQuestions() {
+        const res = await fetch('/api/questions/');
+        const questions = await res.json();
+        const list = document.getElementById('questionsList');
+        if(!questions.length) { list.innerHTML = '<p class="text-gray-500 italic text-sm">No questions found. Upload a PDF first.</p>'; return; }
+        list.innerHTML = '';
+        questions.forEach((q, i) => {
+            const opts = [
+                {label: 'A', val: q.option1},
+                {label: 'B', val: q.option2},
+                {label: 'C', val: q.option3},
+                {label: 'D', val: q.option4},
+            ];
+            
+            // Green if correct_answer exactly matches one of the options
+            const matchedOpt = opts.find(o => o.val && o.val.trim() === q.correct_answer.trim());
+            // Also green if correct_answer is a letter like "A" that maps to an option
+            const letterMap = {A: q.option1, B: q.option2, C: q.option3, D: q.option4};
+            const letterMatch = letterMap[q.correct_answer?.toUpperCase()?.trim()];
+            const hasValidAnswer = matchedOpt || (letterMatch && letterMatch.trim());
+            
+            // Resolve what the actual correct answer text is
+            const correctText = matchedOpt ? matchedOpt.val : (letterMatch || q.correct_answer);
+
+            const optBadges = opts.map(o => {
+                if (!o.val) return '';
+                const isCorrect = (matchedOpt && o.val.trim() === q.correct_answer.trim()) ||
+                                  (letterMatch && o.label === q.correct_answer?.toUpperCase()?.trim());
+                return `<span class="text-xs px-2 py-1 rounded-lg font-medium ${isCorrect 
+                    ? 'bg-green-500/30 text-green-300 border border-green-500/50' 
+                    : 'bg-gray-700/60 text-gray-400 border border-gray-600/40'}">
+                    <span class="font-bold">${o.label})</span> ${o.val}
+                </span>`;
+            }).join('');
+
+            list.innerHTML += `
+                <div class="p-4 bg-gray-800/60 rounded-xl border ${hasValidAnswer ? 'border-green-800/40' : 'border-red-700/50'}">
+                    <p class="font-medium text-sm mb-3 text-gray-200">${i+1}. ${q.question}</p>
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        ${optBadges}
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-center mt-2 pt-2 border-t border-gray-700/40">
+                        <span class="text-xs text-gray-500">Stored Answer:</span>
+                        <span class="text-xs px-2 py-1 rounded font-bold ${hasValidAnswer ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}">${correctText || '(none stored)'}</span>
+                        <span class="text-xs text-gray-500 mx-1">→ Fix:</span>
+                        <select onchange="updateAnswer(${q.id}, opts_${q.id}[this.value])" class="bg-gray-700 text-white text-xs rounded px-2 py-1 border border-gray-600">
+                            <option value="">Select correct answer</option>
+                            ${opts.map((o,idx) => `<option value="${idx}">${o.label}) ${o.val}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>`;
+            // store opts for this question
+            window[`opts_${q.id}`] = opts.map(o => o.val);
+        });
+    }
+
+    async function updateAnswer(id, correctText) {
+        if(!correctText) return;
+        await fetch(`/api/questions/${id}/`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({correct_answer: correctText})
+        });
+        loadQuestions();
+    }
+
+    async function clearAllQuestions() {
+        if(!confirm('Delete ALL questions from the database?')) return;
+        const res = await fetch('/api/questions/all/delete/', {method: 'DELETE'});
+        const d = await res.json();
+        alert(d.message);
+        loadQuestions();
+    }
+
+    fetchTeams();
+    loadQuestions();
+</script>
+{% endblock %}

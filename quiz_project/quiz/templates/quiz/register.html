@@ -1,0 +1,56 @@
+{% extends 'quiz/base.html' %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-950">
+    <div class="w-full max-w-md p-8 rounded-2xl bg-gray-900 shadow-2xl border border-gray-800">
+        <h1 class="text-3xl font-bold mb-6 text-center text-blue-400">Join Team {{ team.name }}</h1>
+        
+        <p id="statusMsg" class="hidden p-4 mb-6 rounded-lg font-medium text-center bg-green-900/50 text-green-400"></p>
+
+        <form id="registerForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
+                <input type="text" id="name" required class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 outline-none text-white" placeholder="Your Name" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Section</label>
+                <input type="text" id="section" required class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 outline-none text-white" placeholder="e.g. A" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Register Number</label>
+                <input type="text" id="register_no" required class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:border-blue-500 outline-none text-white" placeholder="123456" />
+            </div>
+            <button type="submit" class="w-full py-3 mt-4 rounded-lg bg-blue-600 hover:bg-blue-500 font-semibold text-lg">Join Team Now</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+            name: document.getElementById('name').value,
+            section: document.getElementById('section').value,
+            register_no: document.getElementById('register_no').value
+        };
+
+        const res = await fetch('/api/teams/{{ team.id }}/join/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        
+        const statusEl = document.getElementById('statusMsg');
+        statusEl.classList.remove('hidden');
+        if(res.ok) {
+            statusEl.textContent = "Success! You have joined the team.";
+            statusEl.className = "p-4 mb-6 rounded-lg font-medium text-center bg-green-900/50 text-green-400";
+            document.getElementById('registerForm').reset();
+        } else {
+            statusEl.textContent = result.error || "Failed to join team";
+            statusEl.className = "p-4 mb-6 rounded-lg font-medium text-center bg-red-900/50 text-red-400";
+        }
+    });
+</script>
+{% endblock %}

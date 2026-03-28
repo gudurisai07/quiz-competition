@@ -20,9 +20,11 @@ if os.environ.get('RENDER'):
         import traceback
         print("Running automatic database migrations on Render startup...")
         call_command('migrate', interactive=False)
-        print("Migrations completed successfully.")
+        print("Running automatic collectstatic on Render startup...")
+        call_command('collectstatic', interactive=False, clear=False)
+        print("Startup processes completed successfully.")
     except Exception as e:
-        print(f"Failed to run automatic migrations: {e}")
+        print(f"Failed to run automatic startup processes: {e}")
         traceback.print_exc()
 
 application = get_wsgi_application()

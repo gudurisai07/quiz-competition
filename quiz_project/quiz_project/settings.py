@@ -30,14 +30,18 @@ load_dotenv()
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure--p=xt8w!yv-ir9m*49gr2s3%oy(#lgi0#*$n@5fc1p3*8n9%#n')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False') == 'True' if 'RENDER' in os.environ else os.environ.get('DEBUG', 'True') == 'True'
 
 # Allow Render domains and local dev
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+CSRF_TRUSTED_ORIGINS = [url for url in CSRF_TRUSTED_ORIGINS if url] # remove empty strings
+
 if 'RENDER' in os.environ:
     host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
     if host:
         ALLOWED_HOSTS.append(host)
+        CSRF_TRUSTED_ORIGINS.append(f'https://{host}')
 
 
 # Application definition
@@ -98,8 +102,13 @@ DATABASES = {
 # 🚨 CRITICAL: Ensure we are using Postgres when on Render
 if 'RENDER' in os.environ and DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     # If we are on Render but still seeing SQLite, it means DATABASE_URL is missing!
-    # We can't fix it in code, but we can log it clearly in the debug page.
-    pass
+    import sys
+    print("\n" + "="*60, file=sys.stderr)
+    print("🚨 CRITICAL WARNING: RENDER DEPLOYMENT DETECTED 🚨", file=sys.stderr)
+    print("No 'DATABASE_URL' found. Falling back to Ephemeral SQLite.", file=sys.stderr)
+    print("ALL DATA (Teams, Scores, Users) WILL BE DELETED ON RESTART!", file=sys.stderr)
+    print("Please link your PostgreSQL database or use a Blueprint.", file=sys.stderr)
+    print("="*60 + "\n", file=sys.stderr)
 
 
 # Password validation
